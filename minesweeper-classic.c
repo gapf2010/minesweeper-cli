@@ -305,7 +305,7 @@ int main() {
             }
 
             clear_screen();
-            printf("=== HP 48G MINESWEEPER (Classic Edition) ===\n");
+            printf("===== MINESWEEPER (Classic Edition) =====\n");
             printf("Controls: Arrows=Move | [Space/Enter]=Dig | [F]=Flag | [Q]=Quit\n");
             printf("Time: %d sec | Mines: %d\n\n", elapsed_seconds, mines);
 
