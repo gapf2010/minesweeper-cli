@@ -2,7 +2,7 @@
 Two little minesweeper games vibe-coded in C. The versions of the game are:
 
 * Minesweeper classic:
-Move over the board and hit SPACE to open a square or F to flag it as a mine. Game ends when either you flag all mines (you win) or you open a square containing a mine (you lose).
+Use the arrow keys to move over the board and hit SPACE to open a square or F to flag it as a mine. Game ends when either you open all squares not containing a mine (you win) or you open a square containing a mine (you lose).
 
 * Minesweeper pathfinder:
 Start in the upper left corner of the board and use the arrow keys (or QEZC keys for diagonals) to navigate to the bottom right corner. You do not need to find all mines, but it's a nice challenge.
