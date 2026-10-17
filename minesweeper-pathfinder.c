@@ -302,7 +302,7 @@ int main() {
             int elapsed_seconds = (int)(current_time - start_time);
 
             clear_screen();
-            printf("=== HP 48G MINESWEEPER (Pathfinder Edition) ===\n");
+            printf("===== MINESWEEPER (Pathfinder Edition) =====\n");
             printf("Goal: Reach bottom-right [%d,%d] from top-left [0,0]\n", rows - 1, cols - 1);
             printf("Controls: Arrows=Move | [q]=Up-L [e]=Up-R [z]=Down-L [c]=Down-R | [Q]=Quit\n");
             printf("Time: %d sec | Mines: %d\n\n", elapsed_seconds, mines);
