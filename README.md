@@ -19,4 +19,4 @@ or
 $ gcc -o minesweeper-pathfinder minesweeper-pathfinder.c
 ```
 
-The games have been tested to compile and work fine on Linux and OpenBSD (using clang compiler "cc" command instead of "gcc").
+The games have been tested to compile and work fine on Linux and OpenBSD (using clang compiler "cc" command instead of "gcc"). They should also compile and work on Windows using MinGW, but that's untested.
