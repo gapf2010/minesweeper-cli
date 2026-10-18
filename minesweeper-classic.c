@@ -160,9 +160,6 @@ void update_highscores(int seconds, int rows, int cols, int mines) {
     if (scanf("%31s", name) != 1) {
         strcpy(name, "ANONYMOUS");
     }
-#ifndef _WIN32
-    set_raw_mode();
-#endif
 
     scores[count].seconds = seconds;
     scores[count].rows = rows;
