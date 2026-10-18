@@ -99,16 +99,16 @@ void get_highscore_path(char *path, size_t max_len) {
     home = getenv("USERPROFILE");
     if (!home) home = getenv("HOMEDRIVE");
     if (home) {
-        snprintf(path, max_len, "%s\\hp_minesweeper_scores.txt", home);
+        snprintf(path, max_len, "%s\\minesweeper_path_scores.txt", home);
     } else {
-        strncpy(path, "hp_minesweeper_scores.txt", max_len);
+        strncpy(path, "minesweeper_path_scores.txt", max_len);
     }
 #else
     home = getenv("HOME");
     if (home) {
-        snprintf(path, max_len, "%s/.hp_minesweeper_scores.txt", home);
+        snprintf(path, max_len, "%s/.minesweeper_path_scores.txt", home);
     } else {
-        strncpy(path, "hp_minesweeper_scores.txt", max_len);
+        strncpy(path, "minesweeper_path_scores.txt", max_len);
     }
 #endif
 }
