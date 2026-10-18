@@ -245,6 +245,41 @@ void reveal_cell(Cell **board, int rows, int cols, int r, int c, int *revealed_c
     }
 }
 
+void print_board(Cell **board, int rows, int cols, int cursor_r, int cursor_c) {
+    // Top border
+    printf("+");
+    for (int c = 0; c < cols * 3; c++) printf("-");
+    printf("+\n");
+
+    for (int r = 0; r < rows; r++) {
+        printf("|");
+        for (int c = 0; c < cols; c++) {
+            int is_cursor = (r == cursor_r && c == cursor_c);
+            printf("%s", is_cursor ? "[" : " ");
+            
+            if (board[r][c].is_flagged) {
+                printf("F");
+            } else if (!board[r][c].is_revealed) {
+                printf(".");
+            } else if (board[r][c].is_mine) {
+                printf("*");
+            } else if (board[r][c].adjacent_mines > 0) {
+                printf("%d", board[r][c].adjacent_mines);
+            } else {
+                printf(" ");
+            }
+
+            printf("%s", is_cursor ? "]" : " ");
+        }
+        printf("|\n");
+    }
+
+    // Bottom border
+    printf("+");
+    for (int c = 0; c < cols * 3; c++) printf("-");
+    printf("+\n");
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     char play_again = 'y';
@@ -306,27 +341,7 @@ int main() {
             printf("Controls: Arrows=Move | [Space/Enter]=Dig | [F]=Flag | [Q]=Quit\n");
             printf("Time: %d sec | Mines: %d\n\n", elapsed_seconds, mines);
 
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    int is_cursor = (r == cursor_r && c == cursor_c);
-                    printf("%s", is_cursor ? "[" : " ");
-                    
-                    if (board[r][c].is_flagged) {
-                        printf("F");
-                    } else if (!board[r][c].is_revealed) {
-                        printf(".");
-                    } else if (board[r][c].is_mine) {
-                        printf("*");
-                    } else if (board[r][c].adjacent_mines > 0) {
-                        printf("%d", board[r][c].adjacent_mines);
-                    } else {
-                        printf(" ");
-                    }
-
-                    printf("%s", is_cursor ? "]" : " ");
-                }
-                printf("\n");
-            }
+            print_board(board, rows, cols, cursor_r, cursor_c);
 
             int key = get_key();
             if (key == 'Q' || key == 'q') {
@@ -366,6 +381,8 @@ int main() {
         int total_seconds = first_click ? 0 : (int)(time(NULL) - start_time);
 
         clear_screen();
+        reset_terminal_mode();
+
         // Reveal all mines upon game over or win
         if (game_over || won) {
             for (int r = 0; r < rows; r++) {
@@ -375,29 +392,19 @@ int main() {
             }
         }
 
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                int is_cursor = (r == cursor_r && c == cursor_c);
-                printf("%s", is_cursor ? "[" : " ");
-                if (board[r][c].is_flagged) printf("F");
-                else if (!board[r][c].is_revealed) printf(".");
-                else if (board[r][c].is_mine) printf("*");
-                else if (board[r][c].adjacent_mines > 0) printf("%d", board[r][c].adjacent_mines);
-                else printf(" ");
-                printf("%s", is_cursor ? "]" : " ");
-            }
-            printf("\n");
+        // Print win/loss messages and final status ABOVE the board
+        if (won) {
+            printf("\nCONGRATULATIONS! YOU WON IN %d SECONDS!\n\n", total_seconds);
+        } else if (game_over) {
+            printf("\nBOOM! YOU HIT A MINE! Game Over.\n\n");
+        } else {
+            printf("\nGame Ended.\n\n");
         }
 
-        reset_terminal_mode();
+        print_board(board, rows, cols, -1, -1);
 
         if (won) {
-            printf("\nCONGRATULATIONS! YOU WON IN %d SECONDS!\n", total_seconds);
             update_highscores(total_seconds, rows, cols, mines);
-        } else if (game_over) {
-            printf("\nBOOM! YOU HIT A MINE! Game Over.\n");
-        } else {
-            printf("\nGame Ended.\n");
         }
 
         // Cleanup board memory
