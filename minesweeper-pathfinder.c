@@ -186,7 +186,7 @@ void display_highscores(void) {
     HighScore scores[MAX_SCORES];
     int count = 0;
     load_highscores(scores, &count);
-    printf("\n=== TOP FASTEST TIMES ===\n");
+    printf("\n=== TOP FASTEST TIMES (PATHFINDER) ===\n");
     if (count == 0) {
         printf("No high scores recorded yet.\n");
     } else {
@@ -195,7 +195,7 @@ void display_highscores(void) {
                    i + 1, scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
         }
     }
-    printf("=========================\n");
+    printf("======================================\n");
 }
 
 void place_mines(Cell **board, int rows, int cols, int mines) {
