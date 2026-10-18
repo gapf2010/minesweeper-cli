@@ -304,7 +304,13 @@ int main() {
             printf("Controls: Arrows=Move | [q]=Up-L [e]=Up-R [z]=Down-L [c]=Down-R | [Q]=Quit\n");
             printf("Time: %d sec | Mines: %d\n\n", elapsed_seconds, mines);
 
+            // Top border
+            printf("+");
+            for (int c = 0; c < cols * 3; c++) printf("-");
+            printf("+\n");
+
             for (int r = 0; r < rows; r++) {
+                printf("|");
                 for (int c = 0; c < cols; c++) {
                     int is_player = (r == player_r && c == player_c);
                     printf("%s", is_player ? "@" : " ");
@@ -321,8 +327,13 @@ int main() {
 
                     printf("%s", is_player ? "@" : " ");
                 }
-                printf("\n");
+                printf("|\n");
             }
+
+            // Bottom border
+            printf("+");
+            for (int c = 0; c < cols * 3; c++) printf("-");
+            printf("+\n");
 
             int key = get_key();
             if (key == 'Q') {
@@ -366,6 +377,8 @@ int main() {
         int total_seconds = (int)(end_time - start_time);
 
         clear_screen();
+        reset_terminal_mode();
+
         // Reveal all mines upon game over
         if (game_over) {
             for (int r = 0; r < rows; r++) {
@@ -375,7 +388,22 @@ int main() {
             }
         }
 
+        // Print win/loss messages and final status ABOVE the board
+        if (won) {
+            printf("\nCONGRATULATIONS! YOU REACHED THE GOAL IN %d SECONDS!\n\n", total_seconds);
+        } else if (game_over) {
+            printf("\nBOOM! YOU HIT A MINE! Game Over.\n\n");
+        } else {
+            printf("\nGame Ended.\n\n");
+        }
+
+        // Top border
+        printf("+");
+        for (int c = 0; c < cols * 3; c++) printf("-");
+        printf("+\n");
+
         for (int r = 0; r < rows; r++) {
+            printf("|");
             for (int c = 0; c < cols; c++) {
                 int is_player = (r == player_r && c == player_c);
                 printf("%s", is_player ? "@" : " ");
@@ -385,18 +413,16 @@ int main() {
                 else printf(" ");
                 printf("%s", is_player ? "@" : " ");
             }
-            printf("\n");
+            printf("|\n");
         }
 
-        reset_terminal_mode();
+        // Bottom border
+        printf("+");
+        for (int c = 0; c < cols * 3; c++) printf("-");
+        printf("+\n");
 
         if (won) {
-            printf("\nCONGRATULATIONS! YOU REACHED THE GOAL IN %d SECONDS!\n", total_seconds);
             update_highscores(total_seconds, rows, cols, mines);
-        } else if (game_over) {
-            printf("\nBOOM! YOU HIT A MINE! Game Over.\n");
-        } else {
-            printf("\nGame Ended.\n");
         }
 
         // Cleanup board memory
