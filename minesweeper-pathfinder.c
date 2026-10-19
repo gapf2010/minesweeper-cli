@@ -241,6 +241,39 @@ void step_cell(Cell **board, int r, int c, int *game_over, int *won, int rows, i
     }
 }
 
+void print_board(Cell **board, int rows, int cols, int player_r, int player_c) {
+    // Top border
+    printf("+");
+    for (int c = 0; c < cols * 3; c++) printf("-");
+    printf("+\n");
+
+    for (int r = 0; r < rows; r++) {
+        printf("|");
+        for (int c = 0; c < cols; c++) {
+            int is_player = (r == player_r && c == player_c);
+            printf("%s", is_player ? "@" : " ");
+
+            if (!board[r][c].is_revealed) {
+                printf(".");
+            } else if (board[r][c].is_mine) {
+                printf("*");
+            } else if (board[r][c].adjacent_mines > 0) {
+                printf("%d", board[r][c].adjacent_mines);
+            } else {
+                printf(" ");
+            }
+
+            printf("%s", is_player ? "@" : " ");
+        }
+        printf("|\n");
+    }
+
+    // Bottom border
+    printf("+");
+    for (int c = 0; c < cols * 3; c++) printf("-");
+    printf("+\n");
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     char play_again = 'y';
@@ -304,36 +337,7 @@ int main() {
             printf("Controls: Arrows=Move | [q]=Up-L [e]=Up-R [z]=Down-L [c]=Down-R | [Q]=Quit\n");
             printf("Time: %d sec | Mines: %d\n\n", elapsed_seconds, mines);
 
-            // Top border
-            printf("+");
-            for (int c = 0; c < cols * 3; c++) printf("-");
-            printf("+\n");
-
-            for (int r = 0; r < rows; r++) {
-                printf("|");
-                for (int c = 0; c < cols; c++) {
-                    int is_player = (r == player_r && c == player_c);
-                    printf("%s", is_player ? "@" : " ");
-                    
-                    if (!board[r][c].is_revealed) {
-                        printf(".");
-                    } else if (board[r][c].is_mine) {
-                        printf("*");
-                    } else if (board[r][c].adjacent_mines > 0) {
-                        printf("%d", board[r][c].adjacent_mines);
-                    } else {
-                        printf(" ");
-                    }
-
-                    printf("%s", is_player ? "@" : " ");
-                }
-                printf("|\n");
-            }
-
-            // Bottom border
-            printf("+");
-            for (int c = 0; c < cols * 3; c++) printf("-");
-            printf("+\n");
+            print_board(board, rows, cols, player_r, player_c);
 
             int key = get_key();
             if (key == 'Q') {
@@ -397,33 +401,7 @@ int main() {
             printf("\nGame Ended.\n\n");
         }
 
-        // Top border
-        printf("+");
-        for (int c = 0; c < cols * 3; c++) printf("-");
-        printf("+\n");
-
-        for (int r = 0; r < rows; r++) {
-            printf("|");
-            for (int c = 0; c < cols; c++) {
-                int is_player = (r == player_r && c == player_c);
-                printf("%s", is_player ? "@" : " ");
-                if (!board[r][c].is_revealed) printf(".");
-                else if (board[r][c].is_mine) printf("*");
-                else if (board[r][c].adjacent_mines > 0) printf("%d", board[r][c].adjacent_mines);
-                else printf(" ");
-                printf("%s", is_player ? "@" : " ");
-            }
-            printf("|\n");
-        }
-
-        // Bottom border
-        printf("+");
-        for (int c = 0; c < cols * 3; c++) printf("-");
-        printf("+\n");
-
-        if (won) {
-            update_highscores(total_seconds, rows, cols, mines);
-        }
+        print_board(board, rows, cols, player_r, player_c);
 
         // Cleanup board memory
         for (int i = 0; i < rows; i++) {
