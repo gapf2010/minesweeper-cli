@@ -119,7 +119,7 @@ void load_highscores(HighScore scores[], int *count) {
     *count = 0;
     FILE *f = fopen(path, "r");
     if (!f) return;
-    while (*count < MAX_SCORES && fscanf(f, "%31s %d %d %d %d", 
+    while (*count < MAX_SCORES && fscanf(f, "%31[^,\n],%d,%d,%d,%d\n",
            scores[*count].name, 
            &scores[*count].seconds, 
            &scores[*count].rows, 
@@ -136,7 +136,7 @@ void save_highscores(HighScore scores[], int count) {
     FILE *f = fopen(path, "w");
     if (!f) return;
     for (int i = 0; i < count; i++) {
-        fprintf(f, "%s %d %d %d %d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
+        fprintf(f, "%s,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
     }
     fclose(f);
 }
@@ -151,14 +151,14 @@ void update_highscores(int seconds, int rows, int cols, int mines) {
     }
 
     char name[MAX_NAME];
-    printf("\nNew Fast Time! (%d seconds)\nEnter your name (no spaces): ", seconds);
+    printf("\nNew Fast Time! (%d seconds)\nEnter your name: ", seconds);
     fflush(stdout);
     
 #ifndef _WIN32
     reset_terminal_mode();
 #endif
-    if (scanf("%31s", name) != 1) {
-        strcpy(name, "ANONYMOUS");
+    if (scanf("%31[^,\n]", name) != 1) {
+        strlcpy(name, "ANONYMOUS", 9);
     }
 
     scores[count].seconds = seconds;
