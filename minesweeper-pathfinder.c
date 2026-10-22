@@ -285,16 +285,19 @@ int main() {
         display_highscores();
         printf("\nChoose difficulty or custom board:\n");
         printf("1. Beginner (9x9, 10 mines)\n");
-        printf("2. Intermediate (16x16, 40 mines)\n");
-        printf("3. Custom\n");
+        printf("2. HP 48G/GX mode (16x8, 20 mines)\n");
+        printf("3. Intermediate (16x16, 40 mines)\n");
+        printf("4. Custom\n");
         printf("Select option (1-3): ");
         
         int choice = 1;
         if (scanf("%d", &choice) != 1) choice = 1;
 
         if (choice == 2) {
-            rows = 16; cols = 16; mines = 40;
+            rows = 8; cols = 16; mines = 20;
         } else if (choice == 3) {
+            rows = 16; cols = 16; mines = 40;
+        } else if (choice == 4) {
             printf("Enter rows (5-30): ");
             scanf("%d", &rows);
             printf("Enter cols (5-40): ");
