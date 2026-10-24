@@ -119,7 +119,7 @@ void load_highscores(HighScore scores[], int *count) {
     *count = 0;
     FILE *f = fopen(path, "r");
     if (!f) return;
-    while (*count < MAX_SCORES && fscanf(f, "%31[^,\n] %d %d %d %d\n",
+    while (*count < MAX_SCORES && fscanf(f, "%31[^,\n],%d,%d,%d,%d\n",
            scores[*count].name, 
            &scores[*count].seconds, 
            &scores[*count].rows, 
@@ -136,7 +136,7 @@ void save_highscores(HighScore scores[], int count) {
     FILE *f = fopen(path, "w");
     if (!f) return;
     for (int i = 0; i < count; i++) {
-        fprintf(f, "%s %d %d %d %d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
+        fprintf(f, "%s,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
     }
     fclose(f);
 }
@@ -405,6 +405,10 @@ int main() {
         }
 
         print_board(board, rows, cols, player_r, player_c);
+
+        if (won) {
+            update_highscores(total_seconds, rows, cols, mines);
+        }
 
         // Cleanup board memory
         for (int i = 0; i < rows; i++) {
