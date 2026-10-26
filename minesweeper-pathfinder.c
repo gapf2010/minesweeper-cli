@@ -32,6 +32,7 @@ typedef struct {
     int rows;
     int cols;
     int mines;
+    int points;
 } HighScore;
 
 // Terminal helpers for Linux/macOS vs Windows
@@ -119,12 +120,13 @@ void load_highscores(HighScore scores[], int *count) {
     *count = 0;
     FILE *f = fopen(path, "r");
     if (!f) return;
-    while (*count < MAX_SCORES && fscanf(f, "%31[^,\n],%d,%d,%d,%d\n",
+    while (*count < MAX_SCORES && fscanf(f, "%31[^,\n],%d,%d,%d,%d,%d\n",
            scores[*count].name, 
            &scores[*count].seconds, 
            &scores[*count].rows, 
-           &scores[*count].cols, 
-           &scores[*count].mines) == 5) {
+           &scores[*count].cols,
+           &scores[*count].mines,
+           &scores[*count].points) == 6) {
         (*count)++;
     }
     fclose(f);
@@ -136,12 +138,12 @@ void save_highscores(HighScore scores[], int count) {
     FILE *f = fopen(path, "w");
     if (!f) return;
     for (int i = 0; i < count; i++) {
-        fprintf(f, "%s,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
+        fprintf(f, "%s,%d,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines, scores[i].points);
     }
     fclose(f);
 }
 
-void update_highscores(int seconds, int rows, int cols, int mines) {
+void update_highscores(int seconds, int rows, int cols, int mines, int revealed) {
     HighScore scores[MAX_SCORES];
     int count = 0;
     load_highscores(scores, &count);
@@ -165,13 +167,14 @@ void update_highscores(int seconds, int rows, int cols, int mines) {
     scores[count].rows = rows;
     scores[count].cols = cols;
     scores[count].mines = mines;
+    scores[count].points = ((rows * cols) - mines - revealed) * seconds;
     strncpy(scores[count].name, name, MAX_NAME);
     count++;
 
-    // Sort ascending (lowest seconds first)
+    // Sort ascending (lowest points first)
     for (int i = 0; i < count - 1; i++) {
         for (int j = i + 1; j < count; j++) {
-            if (scores[j].seconds < scores[i].seconds) {
+            if (scores[j].points < scores[i].points) {
                 HighScore temp = scores[i];
                 scores[i] = scores[j];
                 scores[j] = temp;
@@ -191,8 +194,8 @@ void display_highscores(void) {
         printf("No high scores recorded yet.\n");
     } else {
         for (int i = 0; i < count; i++) {
-            printf("%d. %s - %d sec (%dx%d board, %d mines)\n", 
-                   i + 1, scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines);
+            printf("%d. %s - %d sec, %d points (%dx%d board, %d mines)\n",
+                   i + 1, scores[i].name, scores[i].seconds, scores[i].points, scores[i].rows, scores[i].cols, scores[i].mines);
         }
     }
     printf("======================================\n");
@@ -330,15 +333,22 @@ int main() {
 
         set_raw_mode();
 
+        int revealed = 0;
+
         while (!game_over && !won) {
             time_t current_time = time(NULL);
             int elapsed_seconds = (int)(current_time - start_time);
+            revealed = 0;
+            for (int i = 0 ; i < rows ; i++)
+                for (int j = 0; j < cols ; j++)
+                    if (board[i][j].is_revealed)
+                        revealed++;
 
             clear_screen();
             printf("===== MINESWEEPER (Pathfinder Edition) =====\n");
             printf("Goal: Reach bottom-right [%d,%d] from top-left [0,0]\n", rows - 1, cols - 1);
             printf("Controls: Arrows=Move | [q]=Up-L [e]=Up-R [z]=Down-L [c]=Down-R | [Q]=Quit\n");
-            printf("Time: %d sec | Mines: %d\n\n", elapsed_seconds, mines);
+            printf("Time: %d sec | Mines: %d | Remaining: %d\n\n", elapsed_seconds, mines, (rows * cols) - mines - revealed);
 
             print_board(board, rows, cols, player_r, player_c);
 
@@ -407,7 +417,7 @@ int main() {
         print_board(board, rows, cols, player_r, player_c);
 
         if (won) {
-            update_highscores(total_seconds, rows, cols, mines);
+            update_highscores(total_seconds, rows, cols, mines, revealed);
         }
 
         // Cleanup board memory
