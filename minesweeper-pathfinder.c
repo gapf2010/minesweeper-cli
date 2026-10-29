@@ -254,10 +254,10 @@ void print_board(Cell **board, int rows, int cols, int player_r, int player_c) {
         printf("|");
         for (int c = 0; c < cols; c++) {
             int is_player = (r == player_r && c == player_c);
-            printf("%s", is_player ? "@" : " ");
+            printf("%s", is_player ? "[" : " ");
 
             if (!board[r][c].is_revealed) {
-                printf(".");
+                printf("■");
             } else if (board[r][c].is_mine) {
                 printf("*");
             } else if (board[r][c].adjacent_mines > 0) {
@@ -266,7 +266,7 @@ void print_board(Cell **board, int rows, int cols, int player_r, int player_c) {
                 printf(" ");
             }
 
-            printf("%s", is_player ? "@" : " ");
+            printf("%s", is_player ? "]" : " ");
         }
         printf("|\n");
     }

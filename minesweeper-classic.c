@@ -260,7 +260,7 @@ void print_board(Cell **board, int rows, int cols, int cursor_r, int cursor_c) {
             if (board[r][c].is_flagged) {
                 printf("F");
             } else if (!board[r][c].is_revealed) {
-                printf(".");
+                printf("■");
             } else if (board[r][c].is_mine) {
                 printf("*");
             } else if (board[r][c].adjacent_mines > 0) {
