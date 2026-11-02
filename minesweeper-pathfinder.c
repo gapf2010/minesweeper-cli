@@ -103,7 +103,6 @@ static void generate(Board *b) {
 /* Moves the player onto a cell. Returns 1 if it was a mine. */
 static int step(Board *b, int r, int c) {
     Cell *cell = &b->cells[r][c];
-    int dr, dc;
 
     cell->is_revealed = 1;
     cell->mark = MARK_NONE;
@@ -112,16 +111,6 @@ static int step(Board *b, int r, int c) {
         return 1;
     }
     cell->visited = 1;
-    if (cell->adjacent_mines == 0) { /* every neighbour is known to be safe */
-        for (dr = -1; dr <= 1; dr++) {
-            for (dc = -1; dc <= 1; dc++) {
-                if (in_bounds(b, r + dr, c + dc)) {
-                    b->cells[r + dr][c + dc].is_revealed = 1;
-                    b->cells[r + dr][c + dc].mark = MARK_NONE;
-                }
-            }
-        }
-    }
     return 0;
 }
 
@@ -355,7 +344,7 @@ static int self_test(void) {
         board_free(&b);
     }
 
-    /* A zero cell opens its neighbours, and stepping on a mine loses. */
+    /* A zero cell opens only itself, and stepping on a mine loses. */
     {
         Board b;
 
@@ -365,7 +354,9 @@ static int self_test(void) {
         b.cells[4][0].is_mine = 1;
         b.cells[1][1].mark = MARK_FLAG;
         CHECK(step(&b, 0, 0) == 0);
-        CHECK(b.cells[1][1].is_revealed && b.cells[1][1].mark == MARK_NONE);
+        CHECK(b.cells[0][0].is_revealed && b.cells[0][0].adjacent_mines == 0);
+        CHECK(!b.cells[0][1].is_revealed && !b.cells[1][1].is_revealed);
+        CHECK(b.cells[1][1].mark == MARK_FLAG);
         CHECK(step(&b, 4, 0) == 1 && b.cells[4][0].exploded);
         board_free(&b);
     }

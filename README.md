@@ -9,8 +9,8 @@ nothing but a C compiler, and work on Linux, the BSDs and Windows.
   its remaining neighbours (chording).
 
 * **Minesweeper pathfinder:** walk from the upper left corner to the goal (`G`)
-  in the bottom right corner. You only learn about the squares you step on, and
-  stepping on a `0` also shows its neighbours. Every board has a safe route.
+  in the bottom right corner. You only learn about the squares you step on. Every
+  board has a safe route.
   You don't need to find all the mines, but your score improves if you explore:
   points are unexplored squares x seconds, and lower is better. The squares you
   walked on stay underlined, or shown as `.` where there is no number.
