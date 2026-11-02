@@ -1,2 +1,4 @@
 mine-classic
 mine-path
+*.exe
+*.obj

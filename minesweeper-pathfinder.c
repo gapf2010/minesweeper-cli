@@ -1,438 +1,389 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+/* Minesweeper, pathfinder edition. See README.md. */
+#include "common.h"
 
-#ifdef _WIN32
-#include <conio.h>
-#include <windows.h>
-#else
-#include <termios.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#endif
+#define HEADER_LINES 5
+#define POLL_MS 100
+#define GENERATE_ATTEMPTS 500
 
-#define KEY_UP 1001
-#define KEY_DOWN 1002
-#define KEY_RIGHT 1003
-#define KEY_LEFT 1004
-#define MAX_SCORES 5
-#define MAX_NAME 32
-
-typedef struct {
-    int is_mine;
-    int is_revealed;
-    int visited;
-    int adjacent_mines;
-} Cell;
-
-typedef struct {
-    char name[MAX_NAME];
-    int seconds;
-    int rows;
-    int cols;
-    int mines;
-    int points;
-} HighScore;
-
-// Terminal helpers for Linux/macOS vs Windows
-#ifndef _WIN32
-static struct termios orig_termios;
-
-void reset_terminal_mode(void) {
-    tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
+/* A shortest walk corner to corner uses max(rows, cols) cells; those have to
+ * stay free or no board of that size could be solved. */
+static int pathfinder_max_mines(int rows, int cols) {
+    return rows * cols - (rows > cols ? rows : cols);
 }
 
-void set_raw_mode(void) {
-    tcgetattr(STDIN_FILENO, &orig_termios);
-    atexit(reset_terminal_mode);
-    struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);
-    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
-}
+static const Preset presets[] = {
+    {"beginner", "Beginner", 9, 9, 10, 0, 0},
+    {"hp48", "HP 48G/GX mode", 8, 16, 20, 0, 0},
+    {"intermediate", "Intermediate", 16, 16, 40, 0, 0},
+    {"daily", "Daily challenge", 16, 16, 40, 1, 0},
+    {"custom", "Custom", 0, 0, 0, 0, 1},
+};
 
-int get_key(void) {
-    int c = getchar();
-    if (c == '\033') {
-        int next1 = getchar();
-        int next2 = getchar();
-        if (next1 == '[') {
-            switch (next2) {
-                case 'A': return KEY_UP;
-                case 'B': return KEY_DOWN;
-                case 'C': return KEY_RIGHT;
-                case 'D': return KEY_LEFT;
-            }
-        }
-    }
-    return c;
-}
-#else
-void set_raw_mode(void) {} // Windows _getch handles this natively
-void reset_terminal_mode(void) {}
+static const GameDef game_def = {
+    "path", "Pathfinder Edition", presets, (int)(sizeof(presets) / sizeof(presets[0])),
+    pathfinder_max_mines
+};
 
-int get_key(void) {
-    int c = _getch();
-    if (c == 0 || c == 224) {
-        int next = _getch();
-        switch (next) {
-            case 72: return KEY_UP;
-            case 80: return KEY_DOWN;
-            case 77: return KEY_RIGHT;
-            case 75: return KEY_LEFT;
-        }
-    }
-    return c;
-}
-#endif
+/* Can the goal be reached from (0,0), moving in all 8 directions? */
+static int path_exists(const Board *b) {
+    int total = b->rows * b->cols;
+    int *queue = (int *)alloc_or_die((size_t)total * sizeof(int));
+    char *seen = (char *)alloc_or_die((size_t)total);
+    int head = 0, tail = 0, found = 0;
 
-void clear_screen(void) {
-#ifdef _WIN32
-    system("cls");
-#else
-    printf("\033[H\033[J");
-#endif
-}
+    queue[tail++] = 0;
+    seen[0] = 1;
+    while (head < tail && !found) {
+        int r = queue[head] / b->cols;
+        int c = queue[head] % b->cols;
+        int dr, dc;
 
-void get_highscore_path(char *path, size_t max_len) {
-    char *home = NULL;
-#ifdef _WIN32
-    home = getenv("USERPROFILE");
-    if (!home) home = getenv("HOMEDRIVE");
-    if (home) {
-        snprintf(path, max_len, "%s\\minesweeper_path_scores.txt", home);
-    } else {
-        strncpy(path, "minesweeper_path_scores.txt", max_len);
-    }
-#else
-    home = getenv("HOME");
-    if (home) {
-        snprintf(path, max_len, "%s/.minesweeper_path_scores.txt", home);
-    } else {
-        strncpy(path, "minesweeper_path_scores.txt", max_len);
-    }
-#endif
-}
-
-void load_highscores(HighScore scores[], int *count) {
-    char path[512];
-    get_highscore_path(path, sizeof(path));
-    *count = 0;
-    FILE *f = fopen(path, "r");
-    if (!f) return;
-    while (*count < MAX_SCORES && fscanf(f, "%31[^,\n],%d,%d,%d,%d,%d\n",
-           scores[*count].name, 
-           &scores[*count].seconds, 
-           &scores[*count].rows, 
-           &scores[*count].cols,
-           &scores[*count].mines,
-           &scores[*count].points) == 6) {
-        (*count)++;
-    }
-    fclose(f);
-}
-
-void save_highscores(HighScore scores[], int count) {
-    char path[512];
-    get_highscore_path(path, sizeof(path));
-    FILE *f = fopen(path, "w");
-    if (!f) return;
-    for (int i = 0; i < count; i++) {
-        fprintf(f, "%s,%d,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows, scores[i].cols, scores[i].mines, scores[i].points);
-    }
-    fclose(f);
-}
-
-void update_highscores(int seconds, int rows, int cols, int mines, int revealed) {
-    HighScore scores[MAX_SCORES];
-    int count = 0;
-    load_highscores(scores, &count);
-
-    if (count == MAX_SCORES && seconds >= scores[count - 1].seconds) {
-        return;
-    }
-
-    char name[MAX_NAME];
-    printf("\nNew Fast Time! (%d seconds)\nEnter your name: ", seconds);
-    fflush(stdout);
-    
-#ifndef _WIN32
-    reset_terminal_mode();
-#endif
-    if (scanf("%31[^,\n]", name) != 1) {
-        strlcpy(name, "ANONYMOUS", 9);
-    }
-
-    scores[count].seconds = seconds;
-    scores[count].rows = rows;
-    scores[count].cols = cols;
-    scores[count].mines = mines;
-    scores[count].points = ((rows * cols) - mines - revealed) * seconds;
-    strncpy(scores[count].name, name, MAX_NAME);
-    count++;
-
-    // Sort ascending (lowest points first)
-    for (int i = 0; i < count - 1; i++) {
-        for (int j = i + 1; j < count; j++) {
-            if (scores[j].points < scores[i].points) {
-                HighScore temp = scores[i];
-                scores[i] = scores[j];
-                scores[j] = temp;
-            }
-        }
-    }
-    if (count > MAX_SCORES) count = MAX_SCORES;
-    save_highscores(scores, count);
-}
-
-void display_highscores(void) {
-    HighScore scores[MAX_SCORES];
-    int count = 0;
-    load_highscores(scores, &count);
-    printf("\n=== TOP FASTEST TIMES (PATHFINDER) ===\n");
-    if (count == 0) {
-        printf("No high scores recorded yet.\n");
-    } else {
-        for (int i = 0; i < count; i++) {
-            printf("%d. %s - %d sec, %d points (%dx%d board, %d mines)\n",
-                   i + 1, scores[i].name, scores[i].seconds, scores[i].points, scores[i].rows, scores[i].cols, scores[i].mines);
-        }
-    }
-    printf("======================================\n");
-}
-
-void place_mines(Cell **board, int rows, int cols, int mines) {
-    int placed = 0;
-    while (placed < mines) {
-        int r = rand() % rows;
-        int c = rand() % cols;
-        // Keep start (0,0) and goal (rows-1, cols-1) safe from mines
-        if ((r == 0 && c == 0) || (r == rows - 1 && c == cols - 1)) continue;
-        if (!board[r][c].is_mine) {
-            board[r][c].is_mine = 1;
-            placed++;
-        }
-    }
-
-    // Calculate adjacent numbers
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            if (board[r][c].is_mine) continue;
-            int count = 0;
-            for (int dr = -1; dr <= 1; dr++) {
-                for (int dc = -1; dc <= 1; dc++) {
-                    int nr = r + dr, nc = c + dc;
-                    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].is_mine) {
-                        count++;
-                    }
-                }
-            }
-            board[r][c].adjacent_mines = count;
-        }
-    }
-}
-
-void step_cell(Cell **board, int r, int c, int *game_over, int *won, int rows, int cols) {
-    board[r][c].is_revealed = 1;
-    if (board[r][c].is_mine) {
-        *game_over = 1;
-        return;
-    }
-    board[r][c].visited = 1;
-    if (r == rows - 1 && c == cols - 1) {
-        *won = 1;
-    }
-}
-
-void print_board(Cell **board, int rows, int cols, int player_r, int player_c) {
-    // Top border
-    printf("+");
-    for (int c = 0; c < cols * 3; c++) printf("-");
-    printf("+\n");
-
-    for (int r = 0; r < rows; r++) {
-        printf("|");
-        for (int c = 0; c < cols; c++) {
-            int is_player = (r == player_r && c == player_c);
-            printf("%s", is_player ? "[" : " ");
-
-            if (!board[r][c].is_revealed) {
-                printf("■");
-            } else if (board[r][c].is_mine) {
-                printf("*");
-            } else if (board[r][c].adjacent_mines > 0) {
-                printf("%d", board[r][c].adjacent_mines);
-            } else {
-                printf(" ");
-            }
-
-            printf("%s", is_player ? "]" : " ");
-        }
-        printf("|\n");
-    }
-
-    // Bottom border
-    printf("+");
-    for (int c = 0; c < cols * 3; c++) printf("-");
-    printf("+\n");
-}
-
-int main() {
-    srand((unsigned int)time(NULL));
-    char play_again = 'y';
-
-    while (play_again == 'y' || play_again == 'Y') {
-        clear_screen();
-
-        int rows = 9, cols = 9, mines = 10;
-        display_highscores();
-        printf("\nChoose difficulty or custom board:\n");
-        printf("1. Beginner (9x9, 10 mines)\n");
-        printf("2. HP 48G/GX mode (16x8, 20 mines)\n");
-        printf("3. Intermediate (16x16, 40 mines)\n");
-        printf("4. Custom\n");
-        printf("Select option (1-3): ");
-        
-        int choice = 1;
-        if (scanf("%d", &choice) != 1) choice = 1;
-
-        if (choice == 2) {
-            rows = 8; cols = 16; mines = 20;
-        } else if (choice == 3) {
-            rows = 16; cols = 16; mines = 40;
-        } else if (choice == 4) {
-            printf("Enter rows (5-30): ");
-            scanf("%d", &rows);
-            printf("Enter cols (5-40): ");
-            scanf("%d", &cols);
-            printf("Enter mines: ");
-            scanf("%d", &mines);
-            if (rows < 5) rows = 5; if (rows > 30) rows = 30;
-            if (cols < 5) cols = 5; if (cols > 40) cols = 40;
-            if (mines < 1) mines = 1;
-            if (mines >= rows * cols) mines = rows * cols - 2;
-        }
-
-        // Allocate board
-        Cell **board = (Cell **)malloc(rows * sizeof(Cell *));
-        for (int i = 0; i < rows; i++) {
-            board[i] = (Cell *)malloc(cols * sizeof(Cell));
-            memset(board[i], 0, cols * sizeof(Cell));
-        }
-
-        place_mines(board, rows, cols, mines);
-
-        int player_r = 0, player_c = 0;
-        int game_over = 0;
-        int won = 0;
-
-        time_t start_time = time(NULL);
-
-        // Step on starting position immediately
-        step_cell(board, player_r, player_c, &game_over, &won, rows, cols);
-
-        set_raw_mode();
-
-        int revealed = 0;
-
-        while (!game_over && !won) {
-            time_t current_time = time(NULL);
-            int elapsed_seconds = (int)(current_time - start_time);
-            revealed = 0;
-            for (int i = 0 ; i < rows ; i++)
-                for (int j = 0; j < cols ; j++)
-                    if (board[i][j].is_revealed)
-                        revealed++;
-
-            clear_screen();
-            printf("===== MINESWEEPER (Pathfinder Edition) =====\n");
-            printf("Goal: Reach bottom-right [%d,%d] from top-left [0,0]\n", rows - 1, cols - 1);
-            printf("Controls: Arrows=Move | [q]=Up-L [e]=Up-R [z]=Down-L [c]=Down-R | [Q]=Quit\n");
-            printf("Time: %d sec | Mines: %d | Remaining: %d\n\n", elapsed_seconds, mines, (rows * cols) - mines - revealed);
-
-            print_board(board, rows, cols, player_r, player_c);
-
-            int key = get_key();
-            if (key == 'Q') {
-                game_over = 1;
-                break;
-            } else if (key == KEY_UP) {
-                if (player_r > 0) player_r--;
-            } else if (key == KEY_DOWN) {
-                if (player_r < rows - 1) player_r++;
-            } else if (key == KEY_LEFT) {
-                if (player_c > 0) player_c--;
-            } else if (key == KEY_RIGHT) {
-                if (player_c < cols - 1) player_c++;
-            } else if (key == 'q') {
-                if (player_r > 0 && player_c > 0) {
-                    player_r--;
-                    player_c--;
-                }
-            } else if (key == 'e') {
-                if (player_r > 0 && player_c < cols - 1) {
-                    player_r--;
-                    player_c++;
-                }
-            } else if (key == 'z') {
-                if (player_r < rows - 1 && player_c > 0) {
-                    player_r++;
-                    player_c--;
-                }
-            } else if (key == 'c') {
-                if (player_r < rows - 1 && player_c < cols - 1) {
-                    player_r++;
-                    player_c++;
-                }
-            }
-
-            // Step onto the new position immediately
-            step_cell(board, player_r, player_c, &game_over, &won, rows, cols);
-        }
-
-        time_t end_time = time(NULL);
-        int total_seconds = (int)(end_time - start_time);
-
-        clear_screen();
-        reset_terminal_mode();
-
-        // Reveal all mines upon game over
-        if (game_over) {
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    if (board[r][c].is_mine) board[r][c].is_revealed = 1;
+        head++;
+        if (r == b->goal_r && c == b->goal_c) found = 1;
+        for (dr = -1; dr <= 1; dr++) {
+            for (dc = -1; dc <= 1; dc++) {
+                int nr = r + dr, nc = c + dc, id;
+                if (!in_bounds(b, nr, nc) || b->cells[nr][nc].is_mine) continue;
+                id = nr * b->cols + nc;
+                if (!seen[id]) {
+                    seen[id] = 1;
+                    queue[tail++] = id;
                 }
             }
         }
+    }
+    free(queue);
+    free(seen);
+    return found;
+}
 
-        // Print win/loss messages and final status ABOVE the board
-        if (won) {
-            printf("\nCONGRATULATIONS! YOU REACHED THE GOAL IN %d SECONDS!\n\n", total_seconds);
-        } else if (game_over) {
-            printf("\nBOOM! YOU HIT A MINE! Game Over.\n\n");
+/* Reserves a random shortest walk from start to goal. */
+static void reserve_path(Board *b) {
+    int r = 0, c = 0;
+
+    b->cells[0][0].reserved = 1;
+    while (r != b->goal_r || c != b->goal_c) {
+        int left_r = b->goal_r - r, left_c = b->goal_c - c;
+
+        if (left_r == left_c) {
+            r++;
+            c++;
+        } else if (left_r > left_c) {
+            r++;
+            if (left_c > 0 && rng_below(2)) c++;
         } else {
-            printf("\nGame Ended.\n\n");
+            c++;
+            if (left_r > 0 && rng_below(2)) r++;
+        }
+        b->cells[r][c].reserved = 1;
+    }
+}
+
+/*
+ * Every board can be solved: boards that wall off the goal are thrown away.
+ * Very dense boards almost never pass by luck, so after enough failures a
+ * walk is set aside before placing the mines. That is what keeps this from
+ * looping forever.
+ */
+static void generate(Board *b) {
+    int attempt;
+
+    for (attempt = 0; attempt < GENERATE_ATTEMPTS; attempt++) {
+        board_clear(b);
+        b->cells[0][0].reserved = 1;
+        b->cells[b->goal_r][b->goal_c].reserved = 1;
+        board_place_mines(b);
+        if (path_exists(b)) return;
+    }
+    board_clear(b);
+    reserve_path(b);
+    board_place_mines(b);
+}
+
+/* Moves the player onto a cell. Returns 1 if it was a mine. */
+static int step(Board *b, int r, int c) {
+    Cell *cell = &b->cells[r][c];
+    int dr, dc;
+
+    cell->is_revealed = 1;
+    cell->mark = MARK_NONE;
+    if (cell->is_mine) {
+        cell->exploded = 1;
+        return 1;
+    }
+    cell->visited = 1;
+    if (cell->adjacent_mines == 0) { /* every neighbour is known to be safe */
+        for (dr = -1; dr <= 1; dr++) {
+            for (dc = -1; dc <= 1; dc++) {
+                if (in_bounds(b, r + dr, c + dc)) {
+                    b->cells[r + dr][c + dc].is_revealed = 1;
+                    b->cells[r + dr][c + dc].mark = MARK_NONE;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int count_revealed_safe(const Board *b) {
+    int r, c, count = 0;
+
+    for (r = 0; r < b->rows; r++) {
+        for (c = 0; c < b->cols; c++) {
+            if (b->cells[r][c].is_revealed && !b->cells[r][c].is_mine) count++;
+        }
+    }
+    return count;
+}
+
+/* Lower is better: fast, and with little of the board left unexplored. */
+static int compute_points(const Board *b, int seconds) {
+    return (b->rows * b->cols - b->mines - count_revealed_safe(b)) * seconds;
+}
+
+/* Maps a key to a move. Returns 0 if it isn't a movement key. */
+static int key_direction(int key, int *dr, int *dc) {
+    if (key >= 'A' && key <= 'Z') key = tolower(key);
+    *dr = 0;
+    *dc = 0;
+    switch (key) {
+        case K_UP: case 'w': case 'k': *dr = -1; break;
+        case K_DOWN: case 's': case 'j': *dr = 1; break;
+        case K_LEFT: case 'a': case 'h': *dc = -1; break;
+        case K_RIGHT: case 'd': case 'l': *dc = 1; break;
+        case 'q': case 'y': *dr = -1; *dc = -1; break;
+        case 'e': case 'u': *dr = -1; *dc = 1; break;
+        case 'z': case 'b': *dr = 1; *dc = -1; break;
+        case 'c': case 'n': *dr = 1; *dc = 1; break;
+        default: return 0;
+    }
+    return 1;
+}
+
+static void draw(const Board *b, const Preset *p, unsigned long seed, int seconds,
+                 int player_r, int player_c, const char *message) {
+    int fits;
+
+    frame_begin();
+    printf("===== MINESWEEPER (Pathfinder Edition) - %s =====", p->label);
+    frame_eol();
+    fputs("Reach G. Arrows/WASD/HJKL=Move  Q,E,Z,C or Y,U,B,N=Diagonals", stdout);
+    frame_eol();
+    fputs("M/F+direction=Mark suspected mine  P=Pause  Shift+Q=Quit", stdout);
+    frame_eol();
+    printf("Time: %d sec | Mines: %d | Remaining: %d | Seed: %lu", seconds, b->mines,
+           b->rows * b->cols - b->mines - count_revealed_safe(b), seed);
+    frame_eol();
+    fputs(message, stdout);
+    frame_eol();
+    fits = board_print_fit(b, player_r, player_c, HEADER_LINES);
+    if (!fits) fputs("Terminal too narrow for this board.", stdout);
+    frame_end();
+}
+
+/* Plays one game. Returns 0 if input closed and the program should end. */
+static int play(const Options *opt, const Preset *p) {
+    Board b;
+    GameTimer timer;
+    unsigned long seed = choose_seed(opt, p);
+    int player_r = 0, player_c = 0;
+    int lost = 0, won = 0, quit = 0, input_open = 1, marking = 0;
+    int dirty = 1, last_seconds = -1, last_w = 0, last_h = 0;
+    int seconds;
+    const char *message = "";
+
+    rng_seed(seed);
+    board_init(&b, p->rows, p->cols, p->mines);
+    b.goal_r = b.rows - 1;
+    b.goal_c = b.cols - 1;
+    generate(&b);
+    step(&b, player_r, player_c);
+    timer_start(&timer);
+
+    raw_enter();
+    show_cursor(0);
+    screen_clear();
+
+    while (!lost && !won && !quit) {
+        int term_w, term_h, key, dr, dc;
+
+        term_size(&term_w, &term_h);
+        if (term_w != last_w || term_h != last_h) {
+            last_w = term_w;
+            last_h = term_h;
+            screen_clear();
+            dirty = 1;
+        }
+        seconds = timer_seconds(&timer);
+        if (seconds != last_seconds) {
+            last_seconds = seconds;
+            dirty = 1;
+        }
+        if (dirty) {
+            draw(&b, p, seed, seconds, player_r, player_c, message);
+            dirty = 0;
         }
 
-        print_board(board, rows, cols, player_r, player_c);
+        key = key_poll(POLL_MS);
+        if (key == K_NONE) continue;
+        dirty = 1;
+        message = "";
 
-        if (won) {
-            update_highscores(total_seconds, rows, cols, mines, revealed);
-        }
-
-        // Cleanup board memory
-        for (int i = 0; i < rows; i++) {
-            free(board[i]);
-        }
-        free(board);
-
-        // Ask to play again
-        printf("\nDo you want to play again? (y/n): ");
-        if (scanf(" %c", &play_again) != 1) {
-            break;
+        if (key == K_EOF) {
+            input_open = 0;
+            quit = 1;
+        } else if (key == 'Q' || key == K_CTRL_C) {
+            quit = 1;
+        } else if (key == K_ESC) {
+            marking = 0;
+        } else if (key == 'p' || key == 'P') {
+            marking = 0;
+            if (!pause_screen(&timer, "MINESWEEPER (Pathfinder Edition)")) {
+                input_open = 0;
+                quit = 1;
+            }
+        } else if (marking) {
+            marking = 0;
+            if (key_direction(key, &dr, &dc) && in_bounds(&b, player_r + dr, player_c + dc)) {
+                Cell *cell = &b.cells[player_r + dr][player_c + dc];
+                if (!cell->is_revealed) {
+                    cell->mark = cell->mark == MARK_FLAG ? MARK_NONE : MARK_FLAG;
+                }
+            }
+        } else if (key == 'm' || key == 'M' || key == 'f' || key == 'F') {
+            marking = 1;
+            message = "Mark which way? (any direction key, Esc to cancel)";
+        } else if (key_direction(key, &dr, &dc) && in_bounds(&b, player_r + dr, player_c + dc)) {
+            if (b.cells[player_r + dr][player_c + dc].mark == MARK_FLAG) {
+                message = "That cell is marked as a mine. Unmark it first to step there.";
+            } else {
+                player_r += dr;
+                player_c += dc;
+                lost = step(&b, player_r, player_c);
+                won = !lost && player_r == b.goal_r && player_c == b.goal_c;
+            }
         }
     }
 
-    printf("Thanks for playing!\n");
+    seconds = timer_seconds(&timer);
+    raw_leave();
+    show_cursor(1);
+    screen_clear();
+
+    b.finished = 1;
+    if (lost) board_reveal_mines(&b);
+
+    if (won) {
+        printf("\nCONGRATULATIONS! YOU REACHED THE GOAL IN %d SECONDS!\n\n", seconds);
+    } else if (lost) {
+        printf("\nBOOM! YOU HIT A MINE! Game Over.\n\n");
+    } else {
+        printf("\nGame Ended.\n\n");
+    }
+    board_print_final(&b, player_r, player_c);
+    printf("Seed: %lu\n", seed);
+
+    if (won) {
+        int points = compute_points(&b, seconds);
+        printf("Score: %d points (%d cells left unexplored)\n", points,
+               b.rows * b.cols - b.mines - count_revealed_safe(&b));
+        if (opt->has_seed) {
+            printf("Played with --seed, so this score is not saved.\n");
+        } else {
+            HighScore result;
+            memset(&result, 0, sizeof(result));
+            result.seconds = seconds;
+            result.points = points;
+            result.rows = b.rows;
+            result.cols = b.cols;
+            result.mines = b.mines;
+            result.date = p->is_daily ? today_utc() : 0;
+            if (!scores_record(&game_def, p, &result, 1)) input_open = 0;
+        }
+    }
+    board_free(&b);
+    return input_open;
+}
+
+static int self_test(void) {
+    static const int sizes[][3] = {
+        {9, 9, 10}, {8, 16, 20}, {16, 16, 40}, {9, 9, 30}, {9, 9, 72}, {5, 5, 20},
+        {30, 40, 1160}, {30, 5, 120}
+    };
+    unsigned long seed;
+    size_t i;
+
+    self_test_common();
+
+    for (i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
+        for (seed = 1; seed <= 100; seed++) {
+            Board b;
+            int rows = sizes[i][0], cols = sizes[i][1], mines = sizes[i][2];
+
+            CHECK(mines <= pathfinder_max_mines(rows, cols));
+            rng_seed(seed);
+            board_init(&b, rows, cols, mines);
+            b.goal_r = rows - 1;
+            b.goal_c = cols - 1;
+            generate(&b);
+            CHECK(board_count_mines(&b) == mines);
+            CHECK(board_counts_correct(&b));
+            CHECK(!b.cells[0][0].is_mine && !b.cells[rows - 1][cols - 1].is_mine);
+            CHECK(path_exists(&b));
+            board_free(&b);
+        }
+    }
+
+    /* Points count the final step, so full exploration really scores 0. */
+    {
+        Board b;
+        int r, c;
+
+        board_init(&b, 5, 5, 1);
+        b.goal_r = 4;
+        b.goal_c = 4;
+        b.cells[2][2].is_mine = 1;
+        CHECK(compute_points(&b, 10) == 240);
+        b.cells[0][0].is_revealed = 1;
+        CHECK(compute_points(&b, 10) == 230);
+        for (r = 0; r < 5; r++) {
+            for (c = 0; c < 5; c++) {
+                if (!b.cells[r][c].is_mine) b.cells[r][c].is_revealed = 1;
+            }
+        }
+        CHECK(compute_points(&b, 10) == 0);
+        board_free(&b);
+    }
+
+    /* A zero cell opens its neighbours, and stepping on a mine loses. */
+    {
+        Board b;
+
+        board_init(&b, 5, 5, 1);
+        b.goal_r = 4;
+        b.goal_c = 4;
+        b.cells[4][0].is_mine = 1;
+        b.cells[1][1].mark = MARK_FLAG;
+        CHECK(step(&b, 0, 0) == 0);
+        CHECK(b.cells[1][1].is_revealed && b.cells[1][1].mark == MARK_NONE);
+        CHECK(step(&b, 4, 0) == 1 && b.cells[4][0].exploded);
+        board_free(&b);
+    }
+    return self_test_result("pathfinder");
+}
+
+int main(int argc, char **argv) {
+    Options opt;
+
+    parse_options(argc, argv, &opt);
+    if (opt.self_test) return self_test();
+
+    for (;;) {
+        Preset custom;
+        const Preset *p = menu_choose(&game_def, &custom, 1);
+
+        if (!p || !play(&opt, p) || !ask_play_again()) break;
+    }
+    printf("\nThanks for playing!\n");
     return 0;
 }
