@@ -29,6 +29,7 @@
 #endif
 #include <windows.h>
 #include <conio.h>
+#include <direct.h>
 #include <io.h>
 #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
@@ -36,6 +37,7 @@
 #else
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
@@ -848,28 +850,74 @@ static void score_insert(HighScore *scores, int *count, const HighScore *entry) 
     scores_sort(scores, *count);
 }
 
-/* suffix == NULL gives the pre-2.0 file shared by every difficulty. */
-static void score_path(const GameDef *game, const char *suffix, char *path, size_t size) {
-    const char *home;
-    const char *dot = "";
-    const char *sep = "/";
+/*
+ * Scores live in one folder:
+ *   Linux/BSD: $XDG_CONFIG_HOME/mine-cli, normally ~/.config/mine-cli
+ *   Windows:   %APPDATA%\mine-cli
+ * with one short file per difficulty, e.g. classic-beginner.txt.
+ */
+#ifdef _WIN32
+#define DIR_SEP '\\'
+#else
+#define DIR_SEP '/'
+#endif
+
+/* Returns 0 if no home folder is known; scores then go in the current one. */
+static int config_dir(char *path, size_t size) {
+    const char *base;
+    const char *sub = "";
 
 #ifdef _WIN32
-    sep = "\\";
-    home = getenv("USERPROFILE");
-    if (!home) home = getenv("HOMEDRIVE");
-#else
-    home = getenv("HOME");
-    if (home) dot = ".";
-#endif
-    if (!home) {
-        home = ".";
-        sep = "/";
+    base = getenv("APPDATA");
+    if (!base || !*base) {
+        base = getenv("USERPROFILE");
+        sub = "\\.config";
     }
-    if (suffix) {
-        snprintf(path, size, "%s%s%sminesweeper_%s_scores.%s.txt", home, sep, dot, game->key, suffix);
+#else
+    base = getenv("XDG_CONFIG_HOME");
+    if (!base || base[0] != '/') { /* the XDG spec ignores relative paths */
+        base = getenv("HOME");
+        sub = "/.config";
+    }
+#endif
+    if (!base || !*base) return 0;
+    snprintf(path, size, "%s%s%cmine-cli", base, sub, DIR_SEP);
+    return 1;
+}
+
+static int make_dir(const char *path) {
+#ifdef _WIN32
+    return _mkdir(path);
+#else
+    return mkdir(path, 0700);
+#endif
+}
+
+/* Like "mkdir -p": creates the folder and any missing parents. */
+static void make_dirs(const char *path) {
+    char buf[MAX_PATH_LEN];
+    size_t i;
+
+    snprintf(buf, sizeof(buf), "%s", path);
+    for (i = 1; buf[i]; i++) {
+        if (buf[i] == '/' || buf[i] == '\\') {
+            char saved = buf[i];
+            if (buf[i - 1] == ':') continue; /* "C:\" */
+            buf[i] = '\0';
+            make_dir(buf);
+            buf[i] = saved;
+        }
+    }
+    make_dir(buf);
+}
+
+static void score_path(const GameDef *game, const Preset *p, char *path, size_t size) {
+    char dir[MAX_PATH_LEN - 64]; /* leaves room for the file name */
+
+    if (config_dir(dir, sizeof(dir))) {
+        snprintf(path, size, "%s%c%s-%s.txt", dir, DIR_SEP, game->key, p->id);
     } else {
-        snprintf(path, size, "%s%s%sminesweeper_%s_scores.txt", home, sep, dot, game->key);
+        snprintf(path, size, "%s-%s.txt", game->key, p->id);
     }
 }
 
@@ -885,42 +933,19 @@ static int score_parse(const char *line, HighScore *e) {
     return 1;
 }
 
-/* Does a score from the old shared file belong to this difficulty? */
-static int legacy_matches(const GameDef *game, const Preset *p, const HighScore *e) {
-    int i;
-
-    if (p->is_daily) return 0;
-    if (!p->is_custom) return e->rows == p->rows && e->cols == p->cols && e->mines == p->mines;
-    for (i = 0; i < game->preset_count; i++) {
-        const Preset *o = &game->presets[i];
-        if (!o->is_custom && !o->is_daily && e->rows == o->rows && e->cols == o->cols &&
-            e->mines == o->mines) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 static void scores_load(const GameDef *game, const Preset *p, HighScore *scores, int *count) {
     char path[MAX_PATH_LEN];
     char line[256];
-    int legacy = 0;
     int today = today_utc();
     FILE *f;
 
     *count = 0;
-    score_path(game, p->id, path, sizeof(path));
+    score_path(game, p, path, sizeof(path));
     f = fopen(path, "r");
-    if (!f) { /* first run after upgrading: pick up the old scores */
-        score_path(game, NULL, path, sizeof(path));
-        f = fopen(path, "r");
-        legacy = 1;
-    }
     if (!f) return;
     while (fgets(line, sizeof(line), f)) {
         HighScore e;
         if (!score_parse(line, &e)) continue;
-        if (legacy && !legacy_matches(game, p, &e)) continue;
         if (p->is_daily && e.date != today) continue;
         if (*count < MAX_SCORES) {
             score_insert(scores, count, &e);
@@ -931,19 +956,23 @@ static void scores_load(const GameDef *game, const Preset *p, HighScore *scores,
     fclose(f);
 }
 
-static void scores_save(const GameDef *game, const Preset *p, const HighScore *scores, int count) {
-    char path[MAX_PATH_LEN];
+/* Returns 0 if the file couldn't be written; path receives its name. */
+static int scores_save(const GameDef *game, const Preset *p, const HighScore *scores, int count,
+                       char *path, size_t size) {
+    char dir[MAX_PATH_LEN];
     FILE *f;
-    int i;
+    int i, ok;
 
-    score_path(game, p->id, path, sizeof(path));
+    if (config_dir(dir, sizeof(dir))) make_dirs(dir);
+    score_path(game, p, path, size);
     f = fopen(path, "w");
-    if (!f) return;
+    if (!f) return 0;
     for (i = 0; i < count; i++) {
         fprintf(f, "%s,%d,%d,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows,
                 scores[i].cols, scores[i].mines, scores[i].points, scores[i].date);
     }
-    fclose(f);
+    ok = !ferror(f);
+    return fclose(f) == 0 && ok;
 }
 
 static void scores_print(const Preset *p, const HighScore *scores, int count, int show_points) {
@@ -967,6 +996,7 @@ static int scores_record(const GameDef *game, const Preset *p, const HighScore *
     HighScore scores[MAX_SCORES];
     HighScore entry = *result;
     char name[128];
+    char path[MAX_PATH_LEN];
     int count = 0;
 
     scores_load(game, p, scores, &count);
@@ -978,7 +1008,9 @@ static int scores_record(const GameDef *game, const Preset *p, const HighScore *
     sanitize_name(name);
     memcpy(entry.name, name, strlen(name) + 1);
     score_insert(scores, &count, &entry);
-    scores_save(game, p, scores, count);
+    if (!scores_save(game, p, scores, count, path, sizeof(path))) {
+        printf("Could not save the score to %s\n", path);
+    }
     putchar('\n');
     scores_print(p, scores, count, show_points);
     return 1;

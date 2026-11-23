@@ -68,10 +68,10 @@ so dig the same square to get the same game.
 The daily challenge is one board per day (UTC) for everyone. Its table only
 keeps the current day's scores.
 
-Each difficulty has its own table of the top 5, saved in your home directory as
-`.minesweeper_classic_scores.<difficulty>.txt` or
-`.minesweeper_path_scores.<difficulty>.txt` (without the leading dot on
-Windows). Scores from older versions are picked up automatically.
+Each difficulty has its own table of the top 5. The tables are kept together
+in `~/.config/mine-cli/` (or `$XDG_CONFIG_HOME/mine-cli/` when that is set),
+or `%APPDATA%\mine-cli\` on Windows, as one short file per difficulty:
+`classic-beginner.txt`, `path-hp48.txt` and so on.
 
 Boards that don't fit the terminal adapt: squares get narrower, and tall boards
 scroll with the cursor (`^` and `v` in the border mean there is more).
