@@ -982,7 +982,7 @@ static void scores_print(const Preset *p, const HighScore *scores, int count, in
     if (count == 0) printf("(no scores yet)\n");
     for (i = 0; i < count; i++) {
         printf("%d. %s - %d sec", i + 1, scores[i].name, scores[i].seconds);
-        if (show_points) printf(", %d points", scores[i].points);
+        if (show_points) printf(", score %d", scores[i].points);
         if (p->is_custom) {
             printf(" (%dx%d, %d mines)", scores[i].rows, scores[i].cols, scores[i].mines);
         }
@@ -1058,7 +1058,9 @@ static const Preset *menu_choose(const GameDef *game, Preset *custom, int show_p
             } else {
                 printf("%d. %s (%dx%d, %d mines)", i + 1, p->label, p->rows, p->cols, p->mines);
             }
-            if (count > 0) {
+            if (count > 0 && show_points) {
+                printf(" - best: %s, score %d", scores[0].name, scores[0].points);
+            } else if (count > 0) {
                 printf(" - best: %s, %d sec", scores[0].name, scores[0].seconds);
             }
             putchar('\n');

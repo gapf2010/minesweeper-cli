@@ -11,9 +11,23 @@ nothing but a C compiler, and work on Linux, the BSDs and Windows.
 * **Minesweeper pathfinder:** walk from the upper left corner to the goal (`G`)
   in the bottom right corner. You only learn about the squares you step on. Every
   board has a safe route.
-  You don't need to find all the mines, but your score improves if you explore:
-  points are unexplored squares x seconds, and lower is better. The squares you
-  walked on stay underlined, or shown as `.` where there is no number.
+  The squares you walked on stay underlined, or shown as `.` where there is no
+  number.
+
+  Reaching the goal is enough to win, but the score rewards finding everything.
+  It works like a penalty time, and lower is better:
+
+  ```
+  score = seconds + 30 x (safe squares not explored + wrong marks)
+  ```
+
+  Each safe square you leave unexplored costs 30 seconds, so exploring the
+  whole board beats rushing to the goal, and among full explorations the
+  fastest wins. Marking mines (M or F, then a direction) is optional: it never
+  lowers your score, so you can just remember where they are. A mark on a safe
+  square costs 30 seconds, though. During play the header shows how many marks
+  you've placed but not whether they're right; the end screen shows the
+  breakdown.
 
 ## Controls
 

@@ -4,6 +4,7 @@
 #define HEADER_LINES 5
 #define POLL_MS 100
 #define GENERATE_ATTEMPTS 500
+#define PENALTY_SECONDS 30 /* per unexplored safe square or wrong mark */
 
 /* A shortest walk corner to corner uses max(rows, cols) cells; those have to
  * stay free or no board of that size could be solved. */
@@ -125,9 +126,33 @@ static int count_revealed_safe(const Board *b) {
     return count;
 }
 
-/* Lower is better: fast, and with little of the board left unexplored. */
+typedef struct {
+    int unexplored;  /* safe squares never stepped on */
+    int wrong_marks; /* marks on safe squares */
+} Missed;
+
+/* Marking mines is optional: an unmarked mine costs nothing, only a mark on
+ * a safe square does. */
+static Missed count_missed(const Board *b) {
+    Missed m;
+    int r, c;
+
+    m.unexplored = b->rows * b->cols - b->mines - count_revealed_safe(b);
+    m.wrong_marks = 0;
+    for (r = 0; r < b->rows; r++) {
+        for (c = 0; c < b->cols; c++) {
+            const Cell *cell = &b->cells[r][c];
+            if (!cell->is_mine && cell->mark == MARK_FLAG) m.wrong_marks++;
+        }
+    }
+    return m;
+}
+
+/* Penalty time, lower is better: the seconds taken plus PENALTY_SECONDS for
+ * each unexplored safe square and wrong mark. A full clear beats rushing. */
 static int compute_points(const Board *b, int seconds) {
-    return (b->rows * b->cols - b->mines - count_revealed_safe(b)) * seconds;
+    Missed m = count_missed(b);
+    return seconds + PENALTY_SECONDS * (m.unexplored + m.wrong_marks);
 }
 
 /* Maps a key to a move. Returns 0 if it isn't a movement key. */
@@ -160,8 +185,10 @@ static void draw(const Board *b, const Preset *p, unsigned long seed, int second
     frame_eol();
     fputs("M/F+direction=Mark suspected mine  P=Pause  Shift+Q=Quit", stdout);
     frame_eol();
-    printf("Time: %d sec | Mines: %d | Remaining: %d | Seed: %lu", seconds, b->mines,
-           b->rows * b->cols - b->mines - count_revealed_safe(b), seed);
+    /* Only the number of marks: whether they are right stays hidden. */
+    printf("Time: %d sec | Marked: %d/%d | Unexplored: %d | Seed: %lu", seconds,
+           board_count_flags(b), b->mines, b->rows * b->cols - b->mines - count_revealed_safe(b),
+           seed);
     frame_eol();
     fputs(message, stdout);
     frame_eol();
@@ -274,8 +301,14 @@ static int play(const Options *opt, const Preset *p) {
 
     if (won) {
         int points = compute_points(&b, seconds);
-        printf("Score: %d points (%d cells left unexplored)\n", points,
-               b.rows * b.cols - b.mines - count_revealed_safe(&b));
+        Missed m = count_missed(&b);
+        int missed = m.unexplored + m.wrong_marks;
+
+        printf("Score: %d = %d sec + %d missed x %d sec (lower is better)\n", points, seconds,
+               missed, PENALTY_SECONDS);
+        printf("Missed: %d unexplored square(s), %d wrong mark(s)\n", m.unexplored,
+               m.wrong_marks);
+        if (m.wrong_marks > 0) printf("Wrong marks are shown as x on the board.\n");
         if (opt->has_seed) {
             printf("Played with --seed, so this score is not saved.\n");
         } else {
@@ -323,7 +356,8 @@ static int self_test(void) {
         }
     }
 
-    /* Points count the final step, so full exploration really scores 0. */
+    /* Penalty-time score: 24 safe squares and 1 mine on a 5x5 board.
+     * Marking the mine is optional and doesn't change the score. */
     {
         Board b;
         int r, c;
@@ -332,15 +366,23 @@ static int self_test(void) {
         b.goal_r = 4;
         b.goal_c = 4;
         b.cells[2][2].is_mine = 1;
-        CHECK(compute_points(&b, 10) == 240);
+        CHECK(compute_points(&b, 10) == 10 + 24 * PENALTY_SECONDS);
         b.cells[0][0].is_revealed = 1;
-        CHECK(compute_points(&b, 10) == 230);
+        CHECK(compute_points(&b, 10) == 10 + 23 * PENALTY_SECONDS);
+        b.cells[3][3].mark = MARK_FLAG; /* wrong mark */
+        CHECK(compute_points(&b, 10) == 10 + 24 * PENALTY_SECONDS);
+        b.cells[3][3].mark = MARK_NONE;
+        b.cells[2][2].mark = MARK_FLAG; /* right mark */
+        CHECK(compute_points(&b, 10) == 10 + 23 * PENALTY_SECONDS);
         for (r = 0; r < 5; r++) {
             for (c = 0; c < 5; c++) {
                 if (!b.cells[r][c].is_mine) b.cells[r][c].is_revealed = 1;
             }
         }
-        CHECK(compute_points(&b, 10) == 0);
+        CHECK(compute_points(&b, 10) == 10); /* everything explored: just the time */
+        CHECK(compute_points(&b, 0) == 0);
+        b.cells[2][2].mark = MARK_NONE;
+        CHECK(compute_points(&b, 10) == 10); /* same without marking the mine */
         board_free(&b);
     }
 
