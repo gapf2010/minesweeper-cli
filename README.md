@@ -85,7 +85,8 @@ keeps the current day's scores.
 Each difficulty has its own table of the top 5. The tables are kept together
 in `~/.config/mine-cli/` (or `$XDG_CONFIG_HOME/mine-cli/` when that is set),
 or `%APPDATA%\mine-cli\` on Windows, as one short file per difficulty:
-`classic-beginner.txt`, `path-hp48.txt` and so on.
+`classic-beginner.txt`, `path-hp48.txt` and so on. Each score is saved with
+the local date and time of the win, and the tables show the date.
 
 Boards that don't fit the terminal adapt: squares get narrower, and tall boards
 scroll with the cursor (`^` and `v` in the border mean there is more).

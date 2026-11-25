@@ -52,6 +52,7 @@
 #define MAX_SCORES 5
 #define MAX_NAME 32
 #define MAX_PATH_LEN 1024
+#define WHEN_LEN 17 /* "YYYY-MM-DD HH:MM" plus the terminator */
 
 #define MIN_ROWS 5
 #define MAX_ROWS 30
@@ -100,6 +101,7 @@ typedef struct {
     int mines;
     int points; /* lower is better; classic stores the seconds here */
     int date;   /* YYYYMMDD (UTC) for daily challenges, otherwise 0 */
+    char when[WHEN_LEN]; /* local "YYYY-MM-DD HH:MM" of the win; "" if unknown */
 } HighScore;
 
 typedef struct {
@@ -921,13 +923,21 @@ static void score_path(const GameDef *game, const Preset *p, char *path, size_t 
     }
 }
 
-/* Parses "name,seconds,rows,cols,mines[,points[,date]]". */
+/* Local date and time, as stored with each score. */
+static void now_local(char *buf, size_t size) {
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+
+    if (!t || strftime(buf, size, "%Y-%m-%d %H:%M", t) == 0) buf[0] = '\0';
+}
+
+/* Parses "name,seconds,rows,cols,mines[,points[,date[,when]]]". */
 static int score_parse(const char *line, HighScore *e) {
     int n;
 
     memset(e, 0, sizeof(*e));
-    n = sscanf(line, "%31[^,\n],%d,%d,%d,%d,%d,%d", e->name, &e->seconds, &e->rows, &e->cols,
-               &e->mines, &e->points, &e->date);
+    n = sscanf(line, "%31[^,\n],%d,%d,%d,%d,%d,%d,%16[^\r\n]", e->name, &e->seconds, &e->rows,
+               &e->cols, &e->mines, &e->points, &e->date, e->when);
     if (n < 5 || e->seconds < 0 || e->rows <= 0 || e->cols <= 0 || e->mines <= 0) return 0;
     if (n == 5) e->points = e->seconds;
     return 1;
@@ -968,8 +978,9 @@ static int scores_save(const GameDef *game, const Preset *p, const HighScore *sc
     f = fopen(path, "w");
     if (!f) return 0;
     for (i = 0; i < count; i++) {
-        fprintf(f, "%s,%d,%d,%d,%d,%d,%d\n", scores[i].name, scores[i].seconds, scores[i].rows,
-                scores[i].cols, scores[i].mines, scores[i].points, scores[i].date);
+        fprintf(f, "%s,%d,%d,%d,%d,%d,%d,%s\n", scores[i].name, scores[i].seconds,
+                scores[i].rows, scores[i].cols, scores[i].mines, scores[i].points, scores[i].date,
+                scores[i].when);
     }
     ok = !ferror(f);
     return fclose(f) == 0 && ok;
@@ -986,6 +997,7 @@ static void scores_print(const Preset *p, const HighScore *scores, int count, in
         if (p->is_custom) {
             printf(" (%dx%d, %d mines)", scores[i].rows, scores[i].cols, scores[i].mines);
         }
+        if (scores[i].when[0]) printf(" on %.10s", scores[i].when); /* the date part */
         putchar('\n');
     }
 }
@@ -1007,6 +1019,7 @@ static int scores_record(const GameDef *game, const Preset *p, const HighScore *
     if (!read_line(name, sizeof(name))) return 0;
     sanitize_name(name);
     memcpy(entry.name, name, strlen(name) + 1);
+    now_local(entry.when, sizeof(entry.when));
     score_insert(scores, &count, &entry);
     if (!scores_save(game, p, scores, count, path, sizeof(path))) {
         printf("Could not save the score to %s\n", path);
@@ -1255,6 +1268,14 @@ static void self_test_common(void) {
     CHECK(score_parse("bob b,12,9,9,10,99\n", &e) && e.points == 99);
     CHECK(score_parse("bob,12,9,9,10,99,20261102\n", &e) && e.date == 20261102);
     CHECK(!score_parse("garbage\n", &e));
+    CHECK(score_parse("bob,12,9,9,10,99,0,2026-11-25 06:54\n", &e) &&
+          strcmp(e.when, "2026-11-25 06:54") == 0);
+    CHECK(score_parse("bob,12,9,9,10,99,0,2026-11-25 06:54\r\n", &e) &&
+          strcmp(e.when, "2026-11-25 06:54") == 0);
+    CHECK(score_parse("bob,12,9,9,10,99,0,\n", &e) && e.when[0] == '\0');
+    CHECK(score_parse("bob,12,9,9,10,99,0\n", &e) && e.when[0] == '\0');
+    now_local(e.when, sizeof(e.when));
+    CHECK(strlen(e.when) == WHEN_LEN - 1 && e.when[4] == '-' && e.when[10] == ' ');
 }
 
 static int self_test_result(const char *what) {
