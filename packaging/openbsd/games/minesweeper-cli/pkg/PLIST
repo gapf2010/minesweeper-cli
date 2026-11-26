@@ -1,0 +1,4 @@
+@bin bin/mine-classic
+@bin bin/mine-path
+@man man/man6/mine-classic.6
+@man man/man6/mine-path.6

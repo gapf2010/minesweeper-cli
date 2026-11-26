@@ -1,0 +1,19 @@
+# HOW TO EDIT THIS FILE:
+# The "handy ruler" below makes it easier to edit a package description.
+# Line up the first '|' above the ':' following the base package name, and
+# the '|' on the right side marks the last column you can put a character in.
+# You must make exactly 11 lines for the formatting to be correct.  It's also
+# customary to leave one space after the ':' except on otherwise blank lines.
+
+               |-----handy-ruler------------------------------------------------------|
+minesweeper-cli: minesweeper-cli (minesweeper games for the terminal)
+minesweeper-cli:
+minesweeper-cli: Two minesweeper games that run in a text terminal. mine-classic is
+minesweeper-cli: the classic game, with a safe first dig, chording, flags and
+minesweeper-cli: question marks. mine-path is the pathfinder game: walk from one
+minesweeper-cli: corner of a hidden minefield to the other, scored on time and on
+minesweeper-cli: how much you explored. Both have a live timer, a pause key, a
+minesweeper-cli: daily challenge, replayable seeds and a top-5 score table per
+minesweeper-cli: difficulty.
+minesweeper-cli:
+minesweeper-cli: Homepage: https://github.com/gapf2010/minesweeper-cli

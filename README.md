@@ -63,6 +63,16 @@ $ cc -o mine-classic minesweeper-classic.c
 $ cc -o mine-path minesweeper-pathfinder.c
 ```
 
+## Installing
+
+```
+$ make
+$ sudo make install      # into /usr/local; "sudo make uninstall" removes it
+```
+
+To build packages for Fedora, Ubuntu/Debian, Arch Linux, Slackware or
+OpenBSD, see [packaging/README.md](packaging/README.md).
+
 ## Options
 
 | Option | Meaning |
@@ -90,3 +100,7 @@ the local date and time of the win, and the tables show the date.
 
 Boards that don't fit the terminal adapt: squares get narrower, and tall boards
 scroll with the cursor (`^` and `v` in the border mean there is more).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

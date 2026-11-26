@@ -47,7 +47,7 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
-#define MS_VERSION "2.0"
+#define MS_VERSION "0.2.0"
 
 #define MAX_SCORES 5
 #define MAX_NAME 32

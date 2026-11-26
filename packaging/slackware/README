@@ -1,0 +1,5 @@
+minesweeper-cli has two minesweeper games for the terminal: mine-classic,
+the classic game, and mine-path, a pathfinder variant where you walk
+across a hidden minefield. Both install into /usr/games.
+
+Scores are kept in ~/.config/mine-cli/.

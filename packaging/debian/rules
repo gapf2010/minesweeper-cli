@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+# Games go in /usr/games, as Debian and Ubuntu policy asks.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+include /usr/share/dpkg/buildflags.mk
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	dh_auto_build -- CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)"
+
+override_dh_auto_install:
+	dh_auto_install -- PREFIX=/usr BINDIR=/usr/games MANDIR=/usr/share/man

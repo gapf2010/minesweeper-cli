@@ -1,0 +1,6 @@
+Two minesweeper games that run in a text terminal. mine-classic is the
+classic game, with a safe first dig, chording, flags and question marks.
+mine-path is the pathfinder game: walk from one corner of a hidden
+minefield to the other, scored on time and on how much you explored.
+Both have a live timer, a pause key, a daily challenge, replayable seeds
+and a top-5 score table per difficulty.

@@ -1,0 +1,109 @@
+.TH MINE-CLASSIC 6 2026-11-26 "minesweeper-cli 0.2.0" "Games Manual"
+.SH NAME
+mine-classic, mine-path \- minesweeper games for the terminal
+.SH SYNOPSIS
+.B mine-classic
+.RI [ options ]
+.br
+.B mine-path
+.RI [ options ]
+.SH DESCRIPTION
+Two minesweeper games that run in a text terminal.
+.PP
+.B mine-classic
+is the classic game: open every square that does not hide a mine.
+The first dig is always safe, and digging a number whose flags are all
+placed opens its remaining neighbours.
+.PP
+.B mine-path
+is the pathfinder game: walk from the top left corner to the goal
+.RB ( G )
+in the bottom right corner, learning only about the squares you step on.
+Every board has a safe route.
+The score is a penalty time, and lower is better: the seconds taken plus
+30 seconds for every safe square left unexplored and for every mark
+placed on a safe square.
+Marking mines is optional.
+.SH OPTIONS
+.TP
+.BI \-\-seed " N"
+Play the board with seed
+.IR N .
+The seed is shown during play, and the same seed gives the same board on
+every platform.
+Scores are not saved.
+.TP
+.B \-\-no\-color
+Monochrome output.
+.TP
+.B \-\-ascii
+Use only ASCII characters on the board.
+.TP
+.B \-\-self\-test
+Run the built-in checks and exit.
+.TP
+.B \-\-version
+Show the version and exit.
+.TP
+.BR \-\-help ", " \-h
+Show a summary of the options and exit.
+.SH KEYS
+.SS mine-classic
+.TP 16
+Arrows, WASD, HJKL
+Move the cursor.
+.TP
+Space, Enter
+Dig.
+.TP
+F
+Place or remove a flag.
+.TP
+M, ?
+Place or remove a question mark.
+.TP
+P
+Pause; the board is hidden.
+.TP
+Q
+Quit the game.
+.SS mine-path
+.TP 16
+Arrows, WASD, HJKL
+Move.
+.TP
+Q E Z C, Y U B N
+Move diagonally.
+.TP
+M or F, then a direction
+Mark or unmark a suspected mine next to you.
+.TP
+P
+Pause; the board is hidden.
+.TP
+Shift+Q
+Quit the game.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+When set, output is monochrome.
+.TP
+.B XDG_CONFIG_HOME
+Base folder for the score files, if set to an absolute path.
+.TP
+.B HOME
+Used to find the score folder when
+.B XDG_CONFIG_HOME
+is not set.
+.SH FILES
+.TP
+.I ~/.config/mine\-cli/
+One score file per game and difficulty, such as
+.I classic\-beginner.txt
+or
+.IR path\-hp48.txt ,
+each holding the top 5 scores with the date and time of each win.
+.SH AUTHORS
+German Pulido.
+.SH SEE ALSO
+https://github.com/gapf2010/minesweeper-cli
